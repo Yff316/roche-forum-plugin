@@ -1,14 +1,13 @@
 window.RochePlugin.register({
   id: "minimalist-forum",
   name: "极简论坛",
-  version: "2.1.0",
+  version: "2.3.0",
   apps: [{
     id: "minimalist-forum-app",
     name: "论坛主页",
     icon: "chat",
     async mount(container, roche) {
 
-      // ========== 1. 初始化数据 ==========
       const defaultWorldView = `围绕着游戏/动漫角色本人发帖（崩铁、原神、鸣潮、绝区零、王者、龙族、夜幕之下、斩神、诡秘之主、排球少年、蓝色监狱、死亡笔记、盗墓笔记、咒术回战、夏目友人帐、银魂、鬼灭之刃、坂本日常、电锯人等）。
 $禁止OOC，严格遵循官方人设。
 $角色全洁，从身到心，只喜欢user一人，不论男女。
@@ -25,7 +24,9 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         apiUrl: "https://api.openai.com/v1/chat/completions",
         apiKey: "", apiModel: "gpt-4o",
         useRocheAI: true,
-        memoryReadCount: 5, selectedWorldbooks: []
+        memoryReadCount: 5,
+        prevPostReadCount: 5,
+        selectedWorldbooks: []
       };
       let userProfile = (await roche.storage.get("forum_user")) || {
         forumName: "旅行者", avatarUrl: "", name: "真名", age: "未知", appearance: "神秘而迷人"
@@ -38,7 +39,7 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
       let memoryIf       = (await roche.storage.get("forum_memory_if"))       || [];
       let favorites      = (await roche.storage.get("forum_favorites"))       || [];
 
-      // ========== 2. CSS ==========
+      // ========== CSS ==========
       const style = document.createElement('style');
       style.id = "minimalist-forum-style";
       style.innerHTML = `
@@ -101,7 +102,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
           -webkit-box-orient:vertical; overflow:hidden;
         }
         .post-stats { margin-top:10px; font-size:13px; color:#888; }
-        /* 底部导航 */
         .forum-bottom-bar {
           display:flex; justify-content:space-around;
           padding:18px 10px; background:var(--bg-color);
@@ -144,7 +144,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
           border:var(--border-style); border-radius:8px; padding:8px 12px;
           font-weight:bold; cursor:pointer; font-size:14px;
         }
-        /* 详情页 */
         .detail-view {
           position:absolute; top:0; left:0; width:100%; height:100%;
           background:var(--bg-color); z-index:10; display:none; flex-direction:column;
@@ -152,17 +151,11 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         .detail-content { flex:1; overflow-y:auto; padding:20px; font-size:15px; line-height:1.8; }
         .skeleton-author { font-weight:bold; color:var(--primary-color); font-size:15px; }
         .skeleton-stats { color:#888; font-size:13px; margin:8px 0; }
-
-        /* ===== 树形评论格式 ===== */
-        /* 顶层评论间分隔线 */
         .top-comment-sep {
           color:var(--primary-color); font-size:18px;
-          margin:6px 0 6px 0; line-height:1.2; user-select:none;
+          margin:6px 0; line-height:1.2; user-select:none;
         }
-        /* 顶层评论行 */
-        .top-comment {
-          margin:4px 0;
-        }
+        .top-comment { margin:4px 0; }
         .comment-row {
           display:flex; align-items:flex-start; gap:8px;
           cursor:pointer; padding:4px 0;
@@ -170,19 +163,12 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         }
         .comment-row:hover { background:rgba(0,0,0,0.03); }
         .comment-body { flex:1; }
-        /* 子评论（回复）缩进区域 */
         .comment-children {
           margin-left:10px;
           border-left:2px solid var(--primary-color);
           padding-left:10px;
           margin-top:4px;
         }
-        /* 子评论内的分隔 */
-        .child-comment-sep {
-          color:var(--primary-color); font-size:14px;
-          margin:4px 0; user-select:none;
-        }
-
         .comment-input-area {
           display:flex; padding:12px; background:var(--card-bg); border-top:var(--border-style);
         }
@@ -195,7 +181,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
           border-radius:20px; padding:0 14px; margin-left:6px;
           font-weight:bold; cursor:pointer;
         }
-        /* 我的主页 tabs */
         .my-tabs { display:flex; border-bottom:var(--border-style); }
         .my-tabs button {
           flex:1; padding:12px; background:none; border:none;
@@ -205,7 +190,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         .my-tabs button.active { text-decoration:underline; text-underline-offset:4px; }
         .my-tab-content { display:none; padding:16px; }
         .my-tab-content.active { display:block; }
-        /* 加载遮罩 */
         .loading-mask {
           display:none; position:absolute; top:0; left:0; width:100%; height:100%;
           background:rgba(255,255,255,0.95); z-index:20;
@@ -222,21 +206,17 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         .decor { display:none; position:absolute; font-size:24px; opacity:0.5; pointer-events:none; }
         .theme-water .decor-water { display:block; color:rgba(163,184,204,0.4); }
         .theme-food .decor-food { display:block; }
-        /* API 状态 */
         .api-status { font-size:12px; margin-top:6px; padding:6px 10px; border-radius:6px; font-weight:bold; }
         .api-status.ok { background:#e6ffe6; color:#2d7a2d; }
         .api-status.fail { background:#ffe6e6; color:#c0392b; }
         label { display:block; margin-top:10px; font-size:14px; }
         .toggle-row { display:flex; align-items:center; gap:10px; margin-top:10px; }
         .toggle-row label { margin:0; }
-        /* 帖主角标 */
         .author-badge {
           font-size:11px; background:var(--primary-color); color:#fff;
           border-radius:4px; padding:1px 5px; margin-left:6px; vertical-align:middle;
         }
-        /* @高亮 */
         .at-name { color:var(--primary-color); font-weight:bold; }
-        /* 错误弹窗 */
         .error-overlay {
           position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99999;
           display:flex; justify-content:center; align-items:center;
@@ -250,7 +230,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
           white-space:pre-wrap; font-size:13px; background:#f7f7f7; padding:10px;
           border-radius:4px; overflow-y:auto; flex:1; margin-bottom:12px; font-family:monospace;
         }
-        /* 回复提示条 */
         .replying-hint {
           font-size:12px; color:var(--primary-color); padding:4px 16px;
           background:var(--bg-color); border-top:1px solid var(--primary-color);
@@ -261,7 +240,7 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
       `;
       document.head.appendChild(style);
 
-      // ========== 3. HTML ==========
+      // ========== HTML ==========
       container.innerHTML = `
         <div class="roche-plugin-forum ${settings.themeStyle !== 'line' ? 'theme-' + settings.themeStyle : ''}" id="main-container">
           <div class="decor decor-water" style="top:10%;left:5%">♡</div>
@@ -275,7 +254,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
             <button id="nav-refresh">↻</button>
           </div>
 
-          <!-- 主页 -->
           <div id="view-feed" class="page-view active">
             <div style="padding:10px 16px;border-bottom:var(--border-style);display:flex;justify-content:space-between;align-items:center;">
               <span style="font-weight:bold;color:var(--primary-color);" id="feed-user-name">@${userProfile.forumName}</span>
@@ -284,7 +262,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
             <div class="forum-content" id="forum-feed-container"></div>
           </div>
 
-          <!-- 板块 -->
           <div id="view-crossover" class="page-view">
             <div class="my-tabs" style="border-bottom:var(--border-style);">
               <button data-bk="cross" class="active">🌌 跨界大乱炖</button>
@@ -294,12 +271,10 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
             <div class="forum-content" id="if-feed-container" style="display:none;"></div>
           </div>
 
-          <!-- 私信 -->
           <div id="view-msg" class="page-view">
             <div style="padding:50px;text-align:center;color:var(--primary-color);font-weight:bold;">私信功能开发中...</div>
           </div>
 
-          <!-- 我的 -->
           <div id="view-user" class="page-view">
             <div style="text-align:center;padding:20px;border-bottom:var(--border-style);">
               <div id="user-avatar-display" style="width:80px;height:80px;border-radius:50%;background:var(--avatar-color);border:2px solid var(--primary-color);margin:0 auto 10px;background-size:cover;background-position:center;${userProfile.avatarUrl ? `background-image:url(${userProfile.avatarUrl});` : ''}"></div>
@@ -334,7 +309,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
             <div class="my-tab-content" data-tab="more"><div style="text-align:center;color:#888;padding:40px;">占位·敬请期待</div></div>
           </div>
 
-          <!-- 设置 -->
           <div id="view-settings" class="page-view">
             <div class="forum-content">
               <div class="form-section">
@@ -374,6 +348,7 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
                   <label>帖子数:<input type="number" id="set-post-count" value="${settings.postCount}" min="1" max="10"></label>
                   <label>评论数:<input type="number" id="set-comment-count" value="${settings.commentCount}" min="0" max="15"></label>
                   <label>记忆读取条数:<input type="number" id="set-memory-count" value="${settings.memoryReadCount}" min="0" max="30"></label>
+                  <label>读取之前帖子条数（含评论，用于刷新参考）:<input type="number" id="set-prev-post-count" value="${settings.prevPostReadCount ?? 5}" min="0" max="30"></label>
                   <label>自定义 API 地址:<input type="text" id="set-api-url" value="${settings.apiUrl}"></label>
                   <label>自定义 API 密钥:<input type="password" id="set-api-key" value="${settings.apiKey}"></label>
                   <div id="model-select-wrap">
@@ -420,7 +395,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
             <button id="nav-settings">设置</button>
           </div>
 
-          <!-- 详情页 -->
           <div class="detail-view" id="view-post-detail">
             <div class="forum-header" style="box-shadow:none;">
               <button id="detail-back">&lt;</button>
@@ -431,7 +405,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
               </div>
             </div>
             <div class="detail-content" id="detail-content-container"></div>
-            <!-- 回复提示条 -->
             <div class="replying-hint" id="replying-hint">
               <span id="replying-hint-text">正在回复 @...</span>
               <button id="replying-hint-cancel">✕</button>
@@ -443,7 +416,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
             </div>
           </div>
 
-          <!-- 发帖弹窗 -->
           <div class="page-view" id="modal-post" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:15;display:none;flex-direction:column;">
             <div class="forum-header">
               <button id="post-cancel" style="font-size:16px;">取消</button>
@@ -502,6 +474,24 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
           </div>`;
         document.body.appendChild(overlay);
         overlay.querySelector('#err-close').onclick = () => overlay.remove();
+      };
+
+      // ========== JSON 容错解析 ==========
+      const safeParseJSON = (raw) => {
+        const start = raw.indexOf('[');
+        if (start === -1) throw new Error('返回内容中未找到 JSON 数组\n原始内容：' + raw.slice(0, 300));
+        const end = raw.lastIndexOf(']');
+        if (end !== -1) {
+          return JSON.parse(raw.substring(start, end + 1));
+        }
+        const partial = raw.substring(start);
+        const lastClose = partial.lastIndexOf('}');
+        if (lastClose === -1) throw Object.assign(new Error('Unexpected end of JSON，无法恢复'), { raw: raw.slice(0, 500) });
+        try {
+          return JSON.parse(partial.substring(0, lastClose + 1) + ']');
+        } catch(e2) {
+          throw Object.assign(new Error('JSON 截断恢复失败：' + e2.message), { raw: raw.slice(0, 500) });
+        }
       };
 
       // ========== AI 调用 ==========
@@ -680,31 +670,15 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         });
       };
 
-      // ========== 详情页 - 树形评论渲染 ==========
-      // 格式：
-      //   @帖主
-      //      内容
-      //   ——点赞 ★ ＞
-      //   |
-      //   |
-      //   @顶层评论1
-      //      内容
-      //      |
-      //      @回复评论1（缩进）
-      //         内容
-      //   |
-      //   |
-      //   @顶层评论2 ...
-
+      // ========== 详情页 - 树形评论 ==========
       const detailView = $('#view-post-detail');
       const detailC = $('#detail-content-container');
       const replyingHint = $('#replying-hint');
       const replyingHintText = $('#replying-hint-text');
       const commentInput = $('#detail-comment-input');
       let curPostId = null;
-      let replyParentId = null; // null = 顶层回复
+      let replyParentId = null;
 
-      // 设置回复目标
       const setReplyTarget = (authorName, commentId) => {
         replyParentId = commentId;
         commentInput.value = `@${authorName} `;
@@ -719,15 +693,13 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
       };
       $('#replying-hint-cancel').onclick = clearReplyTarget;
 
-      // 渲染评论树（递归）
+      // 递归渲染评论树
       const buildCommentTreeHTML = (comments, postAuthor, parentId, depth) => {
         const children = comments.filter(c => (c.parentId || null) === parentId);
         if (!children.length) return '';
-
         let html = '';
         children.forEach((c, idx) => {
           if (depth === 0 && idx > 0) {
-            // 顶层评论之间加竖线分隔
             html += `<div class="top-comment-sep">|<br>|</div>`;
           }
           const isUser   = c.author === userProfile.forumName;
@@ -735,7 +707,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
           const avStyle  = isUser ? userAvatarStyle() : '';
           const badge    = isAuthor ? `<span class="author-badge">楼主</span>` : '';
           const sub = buildCommentTreeHTML(comments, postAuthor, c.id, depth + 1);
-
           html += `<div class="top-comment">
             <div class="comment-row" data-cid="${c.id}" data-cauthor="${c.author}">
               <div class="bw-avatar small" style="${avStyle}"></div>
@@ -750,10 +721,7 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         return html;
       };
 
-      $('#detail-back').onclick = () => {
-        detailView.style.display = 'none';
-        clearReplyTarget();
-      };
+      $('#detail-back').onclick = () => { detailView.style.display = 'none'; clearReplyTarget(); };
 
       const openDetail = (id) => {
         const loc = locatePost(id); if (!loc) return;
@@ -764,7 +732,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         const isUser = p.author === userProfile.forumName;
         const avStyle = isUser ? userAvatarStyle() : '';
         const comments = p.comments || [];
-
         let html = `
           <div style="display:flex;align-items:center;margin-bottom:8px;">
             <div class="bw-avatar" style="${avStyle}"></div>
@@ -773,12 +740,11 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
           <div style="white-space:pre-wrap;">${renderAt(p.content)}</div>
           <div class="skeleton-stats">——♡${likes} ★${stars} ＞${comments.length}</div>
           <div style="color:var(--primary-color);margin:8px 0;">|<br>|</div>`;
-
         const treeHTML = buildCommentTreeHTML(comments, p.author, null, 0);
         html += treeHTML || '<div style="color:#888;margin-left:10px;">暂无评论，在下方输入或点击「召唤」</div>';
         detailC.innerHTML = html;
 
-        // 点击评论行 → 自动填写回复
+        // 点击评论 → 填入输入框
         detailC.querySelectorAll('.comment-row').forEach(row => {
           row.onclick = (e) => {
             e.stopPropagation();
@@ -790,41 +756,61 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         detailView.style.display = 'flex';
       };
 
-      // ========== 发送评论 ==========
+      // ========== 发送评论（世界观锁定 + 帖主概率回复）==========
       const sendComment = async (text, parentId) => {
         const loc = locatePost(curPostId); if (!loc) return;
         const p = loc.arr.find(x => x.id === curPostId);
         p.comments = p.comments || [];
-
         const newComment = { id: crypto.randomUUID(), author: userProfile.forumName, content: text, parentId: parentId || null };
         p.comments.push(newComment);
         await roche.storage.set(loc.key, loc.arr);
         clearReplyTarget();
         openDetail(p.id);
 
-        // 角色自动回复
-        loadingText.innerText = "正在呼唤角色回复..."; loadingMask.style.display = 'flex';
+        // 找回复的楼层根评论（世界观锁定）
+        let floorRootAuthor = null;
+        if (parentId) {
+          const findRoot = (cid) => {
+            const c = p.comments.find(x => x.id === cid);
+            if (!c || !c.parentId) return c;
+            return findRoot(c.parentId);
+          };
+          const root = findRoot(parentId);
+          if (root && root.author !== userProfile.forumName) floorRootAuthor = root.author;
+        }
+
+        const scopeHint = loc.kind === 'feed'
+          ? '请扮演原帖作者本人，或同世界观其他角色回复。禁止其他世界观角色出现。'
+          : loc.kind === 'cross'
+          ? '这是【跨界大乱炖】板块，允许不同世界观角色跨界串门评论。'
+          : '这是【if 线】板块，评论区必须是与帖主同一个世界观的角色。';
+
+        const floorScopeHint = floorRootAuthor
+          ? `⚠️ 用户是在 @${floorRootAuthor} 的楼层下回复的。请先判断 @${floorRootAuthor} 属于哪个作品世界观，然后只生成同一个世界观的角色来回复，严禁其他世界观角色出现在这条回复链里。`
+          : scopeHint;
+
+        loadingText.innerText = "正在呼唤角色回复...";
+        loadingMask.style.display = 'flex';
         try {
-          const scopeHint = loc.kind === 'feed'
-            ? '请扮演原帖作者本人，或同世界观其他角色回复。禁止其他世界观角色出现。'
-            : loc.kind === 'cross'
-            ? '这是【跨界大乱炖】板块，允许不同世界观角色跨界串门评论。'
-            : '这是【if 线】板块，评论区必须是与帖主同一个世界观的角色。';
           const prompt = `你是论坛模拟器。用户（@${userProfile.forumName}，真名/爱称[${userProfile.name}]）刚刚在帖子下评论了。
 原帖作者：@${p.author}
 原帖内容：${p.content}
 用户评论：${text}
-${scopeHint}
-生成 1~2 条角色回复（不含帖主本人，帖主单独处理）。严格遵循官方人设，禁止OOC，禁止图片描述。emoji按人设自行判断。当前心情:${currentMood()}。
+${floorScopeHint}
+生成 1~2 条角色回复（不含帖主本人）。严格遵循官方人设，禁止OOC，禁止图片描述。emoji按人设自行判断。当前心情:${currentMood()}。
 如果@某人，使用格式 @名字。
-输出纯JSON数组:[{"author":"角色名","content":"@${userProfile.forumName} 回复内容"}]`;
+输出纯JSON数组（必须完整合法）:[{"author":"角色名","content":"@${userProfile.forumName} 回复内容"}]`;
           const raw = await callAI(prompt);
-          const replies = JSON.parse(raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1));
+          const replies = safeParseJSON(raw);
           replies.forEach(r => p.comments.push({ id: crypto.randomUUID(), author: r.author, content: r.content, parentId: newComment.id }));
           await roche.storage.set(loc.key, loc.arr);
           openDetail(p.id);
-        } catch (e) { roche.ui.toast("角色暂时没回复"); }
-        finally { loadingMask.style.display = 'none'; }
+        } catch (e) {
+          console.warn("角色回复失败", e);
+          roche.ui.toast("角色暂时没回复");
+        } finally {
+          loadingMask.style.display = 'none';
+        }
 
         // 帖主概率回复（~55%）
         if (p.author !== userProfile.forumName && Math.random() < 0.55) {
@@ -835,13 +821,12 @@ ${scopeHint}
 帖主发帖内容：${p.content}
 评论区（含用户 @${userProfile.forumName} 刚发的评论）：
 ${existing}
-
 请判断帖主这次想不想回复，想回谁（可以只回用户，可以回某条评论，也可以沉默不回）。
 - 如果决定回复，输出JSON：[{"author":"${p.author}","content":"@回复对象 内容","replyTo":"被回复的评论者名字"}]
 - 如果决定不回复，输出：[]
-帖主对 @${userProfile.forumName} 通常有特别在意，但并非每次必回。输出纯JSON，不要其他文字。`;
+帖主对 @${userProfile.forumName} 通常有特别在意，但并非每次必回。输出纯完整JSON，不要其他文字。`;
             const raw2 = await callAI(authorPrompt);
-            const arr2 = JSON.parse(raw2.substring(raw2.indexOf('['), raw2.lastIndexOf(']') + 1));
+            const arr2 = safeParseJSON(raw2);
             if (arr2.length > 0) {
               arr2.forEach(r => {
                 let replyParId = null;
@@ -865,7 +850,7 @@ ${existing}
         await sendComment(t, pid);
       };
 
-      // 手动召唤
+      // 召唤
       $('#detail-comment-summon').onclick = async () => {
         const loc = locatePost(curPostId); if (!loc) return;
         const p = loc.arr.find(x => x.id === curPostId);
@@ -880,9 +865,9 @@ ${existing}
 【用户】@${userProfile.forumName}，真名/爱称[${userProfile.name}]
 ${scopeHint}
 角色当前心情:${currentMood()}。严格遵循官方人设，禁止OOC，禁止图片描述。如果@某人使用格式@名字。
-输出纯JSON数组:[{"author":"角色名","content":"@某人 回复内容"}]`;
+输出纯JSON数组（必须完整合法）:[{"author":"角色名","content":"@某人 回复内容"}]`;
           const raw = await callAI(prompt);
-          const replies = JSON.parse(raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1));
+          const replies = safeParseJSON(raw);
           replies.forEach(r => (p.comments = p.comments||[]).push({ id: crypto.randomUUID(), author: r.author, content: r.content, parentId: null }));
           await roche.storage.set(loc.key, loc.arr);
           openDetail(p.id); roche.ui.toast("角色赶来了");
@@ -961,7 +946,7 @@ ${scopeHint}
       };
 
       // ========== 拉取模型列表 ==========
-      $('#btn-fetch-models').onclick = async () => {
+      $('#btn-fetch-models').onclick = async function() {
         const url = $('#set-api-url').value, key = $('#set-api-key').value;
         if (!url || !key) { roche.ui.toast("请先填写 API 地址和密钥"); return; }
         try {
@@ -972,7 +957,7 @@ ${scopeHint}
           const models = (data.data || data.models || []).map(m => m.id || m).filter(Boolean);
           if (!models.length) { roche.ui.toast("未获取到模型列表"); return; }
           const wrap = $('#model-select-wrap');
-          const current = $('#set-api-model').value || settings.apiModel || 'gpt-4o';
+          const current = ($('#set-api-model') ? $('#set-api-model').value : null) || settings.apiModel || 'gpt-4o';
           wrap.innerHTML = `
             <label>选择模型:
               <select id="set-api-model">
@@ -991,8 +976,8 @@ ${scopeHint}
         resultEl.innerHTML = '<div class="api-status" style="background:#fff3cd;color:#856404;">测试中...</div>';
         try {
           const url = $('#set-api-url').value, key = $('#set-api-key').value;
-          const model = ($('#set-api-model') && $('#set-api-model').tagName === 'SELECT'
-            ? $('#set-api-model').value : $('#set-api-model')?.value) || 'gpt-3.5-turbo';
+          const modelEl = $('#set-api-model');
+          const model = (modelEl ? modelEl.value : null) || 'gpt-3.5-turbo';
           if (!url || !key) { resultEl.innerHTML = '<div class="api-status fail">请先填写 API 地址和密钥</div>'; return; }
           const res = await fetch(url, {
             method: 'POST',
@@ -1009,17 +994,18 @@ ${scopeHint}
 
       // ========== 设置保存 & 清理 ==========
       $('#settings-save').onclick = async () => {
-        settings.themeStyle      = $('#theme-style').value;
-        settings.themeColor      = $('#theme-color').value;
-        settings.worldView       = $('#set-worldview').value;
-        settings.postCount       = parseInt($('#set-post-count').value) || 3;
-        settings.commentCount    = parseInt($('#set-comment-count').value) || 5;
-        settings.memoryReadCount = parseInt($('#set-memory-count').value) || 5;
-        settings.apiUrl          = $('#set-api-url').value;
-        settings.apiKey          = $('#set-api-key').value;
+        settings.themeStyle       = $('#theme-style').value;
+        settings.themeColor       = $('#theme-color').value;
+        settings.worldView        = $('#set-worldview').value;
+        settings.postCount        = parseInt($('#set-post-count').value) || 3;
+        settings.commentCount     = parseInt($('#set-comment-count').value) || 5;
+        settings.memoryReadCount  = parseInt($('#set-memory-count').value) || 5;
+        settings.prevPostReadCount= parseInt($('#set-prev-post-count').value) ?? 5;
+        settings.apiUrl           = $('#set-api-url').value;
+        settings.apiKey           = $('#set-api-key').value;
         const modelEl = $('#set-api-model');
-        settings.apiModel        = modelEl ? modelEl.value : 'gpt-4o';
-        settings.useRocheAI      = $('#use-roche-ai').checked;
+        settings.apiModel         = modelEl ? modelEl.value : 'gpt-4o';
+        settings.useRocheAI       = $('#use-roche-ai').checked;
         settings.selectedWorldbooks = Array.from($$('.wb-check:checked')).map(cb => cb.value);
         await roche.storage.set("forum_settings", settings);
         roche.ui.toast("设置已保存");
@@ -1073,37 +1059,67 @@ ${scopeHint}
       // ========== 刷新生成 ==========
       $('#nav-refresh').onclick = async () => {
         let refreshMode = currentMode, refreshSub = boardSub;
-        loadingText.innerText = "正在捕捉时空交汇的电波..."; loadingMask.style.display = 'flex';
+        loadingText.innerText = "正在捕捉时空交汇的电波...";
+        loadingMask.style.display = 'flex';
         try {
           const memArr    = refreshMode==='feed' ? memoryFeed : (refreshSub==='if' ? memoryIf : memoryCross);
           const recentSrc = refreshMode==='feed' ? posts      : (refreshSub==='if' ? ifPosts  : crossoverPosts);
-          const recentPosts = recentSrc.slice(0, settings.memoryReadCount);
-          const memText   = memArr.slice(0,3).map(m => `[${m.time}] ${m.summary}`).join('\n') || '（无）';
-          const recentText= recentPosts.map(p => `@${p.author}: ${p.content.slice(0,60)}`).join('\n') || '（无）';
-          const wbText    = await getWorldbookText();
 
-          const basePrompt = `【世界观】：\n${settings.worldView}\n【世界书补充】：\n${wbText||'（无）'}\n【用户情报】：网名 @${userProfile.forumName}，真名/爱称[${userProfile.name}]，年龄${userProfile.age}，外貌：${userProfile.appearance}。\n【论坛记忆】：\n${memText}\n【最近${recentPosts.length}条帖子参考】：\n${recentText}\n【发帖硬性规则】：\n- 严格遵循官方人设，禁止OOC。\n- 禁止图片描述。\n- 每个角色发帖时假设有当前心情（如${currentMood()}），要有活人感。\n- emoji根据人设自行判断，不强制。\n- 如果@某人，使用格式 @名字（无括号）。`;
+          const memText = memArr.slice(0, 3).map(m => `[${m.time}] ${m.summary}`).join('\n') || '（无）';
+
+          // 读取之前帖子（含评论摘要）
+          const prevCount = settings.prevPostReadCount ?? 5;
+          const prevPosts = recentSrc.slice(0, prevCount);
+          const prevPostsText = prevPosts.length
+            ? prevPosts.map(p => {
+                const cmtSummary = (p.comments || []).slice(0, 6)
+                  .map(c => `  └@${c.author}: ${c.content.slice(0, 40)}`).join('\n');
+                return `@${p.author}（帖子）: ${p.content.slice(0, 80)}\n${cmtSummary}`;
+              }).join('\n\n')
+            : '（无）';
+
+          // 已出现的作者黑名单（防止重复发帖）
+          const existingAuthors = [...new Set(recentSrc.map(p => p.author))];
+          const authorBlacklist = existingAuthors.length
+            ? `⚠️ 以下角色在最近帖子中已出现过，本次刷新【禁止】再让他们发帖（评论区可以出现）：${existingAuthors.join('、')}`
+            : '';
+
+          const wbText = await getWorldbookText();
+          const basePrompt = `【世界观】：\n${settings.worldView}\n【世界书补充】：\n${wbText||'（无）'}\n【用户情报】：网名 @${userProfile.forumName}，真名/爱称[${userProfile.name}]，年龄${userProfile.age}，外貌：${userProfile.appearance}。\n【论坛记忆】：\n${memText}\n【最近${prevPosts.length}条历史帖子（含部分评论）】：\n${prevPostsText}\n${authorBlacklist}\n【发帖铁律】：\n- 本次生成的每篇帖子必须来自不同角色，严禁同一角色发多篇帖子。\n- 必须来自不同世界观（例如第1篇崩铁角色、第2篇原神角色、第3篇咒术回战角色），不允许同一个作品连续发帖。\n- 严格遵循官方人设，禁止OOC。\n- 禁止图片描述。\n- emoji根据人设自行判断，不强制。\n- 如果@某人，使用格式 @名字（无括号）。\n- 每个评论楼层内，回复同一条顶层评论的角色必须和该顶层评论者来自同一作品世界观，跨世界观角色禁止出现在同一楼层回复链里（主页板块）。`;
 
           let prompt;
           if (refreshMode === 'feed') {
-            prompt = `${basePrompt}\n主题限定五类之一：1.日常生活 2.小烦恼 3.工作 4.小幸运 5.对user暗戳戳的思念/表白/吃醋。\n评论区必须是同世界观角色。\n生成 ${settings.postCount} 篇帖子，每篇 ${settings.commentCount} 条评论。\n输出纯JSON数组:[{"author":"角色名","content":"正文","likes":数字,"stars":数字,"comments":[{"author":"评论人","content":"内容"}]}]`;
+            prompt = `${basePrompt}\n主题限定五类之一：1.日常生活 2.小烦恼 3.工作 4.小幸运 5.对user暗戳戳的思念/表白/吃醋。\n评论区每个顶层楼层只能有同世界观角色回复，禁止不同世界观角色出现在同一楼层。\n生成 ${settings.postCount} 篇帖子，每篇 ${settings.commentCount} 条评论（评论可有子回复，子回复必须和楼主同一世界观）。\n输出纯JSON数组（必须完整合法，不能截断）:[{"author":"角色名","content":"正文","likes":数字,"stars":数字,"comments":[{"author":"评论人","content":"内容","parentIndex":null或父评论的0起始index}]}]`;
           } else if (refreshSub === 'cross') {
-            prompt = `${basePrompt}\n这是【跨界大乱炖】板块。围绕以下三种反应生成帖子（三选一或混合）：\n① 各世界观角色发现 user 在他们那边也有"马甲"的震惊反应；\n② 各世界观里暗恋 user 的角色聚在一起时的反应；\n③ 某个世界观的角色发帖描述 user 在他们那边干过的具体事情。\n生成 ${settings.postCount} 篇，每篇 ${settings.commentCount} 条评论。输出格式同上。`;
+            prompt = `${basePrompt}\n这是【跨界大乱炖】板块，允许不同世界观角色跨界串门，无世界观限制。\n围绕以下三种反应生成帖子（三选一或混合）：\n① 各世界观角色发现 user 在他们那边也有"马甲"的震惊反应；\n② 各世界观里暗恋 user 的角色聚在一起时的反应；\n③ 某个世界观的角色发帖描述 user 在他们那边干过的具体事情。\n生成 ${settings.postCount} 篇，每篇 ${settings.commentCount} 条评论。输出格式同上（必须完整合法）。`;
           } else {
-            prompt = `${basePrompt}\n这是【if 线】板块——平行时空里帖主已和 user 在一起了。帖主秀恩爱，评论区其他角色暗恋 user 所以破防酸柠檬。\n⚠️ 帖主和评论区角色必须来自同一个世界观。\n生成 ${settings.postCount} 篇，每篇 ${settings.commentCount} 条评论。输出格式同上。`;
+            prompt = `${basePrompt}\n这是【if 线】板块——平行时空里帖主已和 user 在一起了。帖主秀恩爱，评论区其他角色暗恋 user 所以破防酸柠檬。\n⚠️ 帖主和评论区角色必须来自同一个世界观。\n生成 ${settings.postCount} 篇，每篇 ${settings.commentCount} 条评论。输出格式同上（必须完整合法）。`;
           }
 
           const raw = await callAI(prompt);
-          const json = raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1);
-          const arr = JSON.parse(json);
-          const newPosts = arr.map(it => ({
-            id: crypto.randomUUID(),
-            author: it.author || "未知",
-            content: it.content || "",
-            likes: it.likes ?? Math.floor(Math.random() * 500),
-            stars: it.stars ?? Math.floor(Math.random() * 200),
-            comments: (it.comments || []).map(c => ({ id: crypto.randomUUID(), author: c.author, content: c.content, parentId: null }))
-          }));
+          const arr = safeParseJSON(raw);
+
+          // parentIndex → parentId
+          const newPosts = arr.map(it => {
+            const rawComments = it.comments || [];
+            const withIds = rawComments.map(c => ({ ...c, id: crypto.randomUUID() }));
+            const comments = withIds.map((c, i) => ({
+              id: c.id,
+              author: c.author,
+              content: c.content,
+              parentId: (c.parentIndex != null && c.parentIndex >= 0 && c.parentIndex < i)
+                ? withIds[c.parentIndex].id
+                : null
+            }));
+            return {
+              id: crypto.randomUUID(),
+              author: it.author || "未知",
+              content: it.content || "",
+              likes: it.likes ?? Math.floor(Math.random() * 500),
+              stars: it.stars ?? Math.floor(Math.random() * 200),
+              comments
+            };
+          });
 
           if (refreshMode === 'feed')      { posts          = [...newPosts, ...posts];          await roche.storage.set("forum_posts",          posts);          renderFeed(); }
           else if (refreshSub === 'cross') { crossoverPosts = [...newPosts, ...crossoverPosts]; await roche.storage.set("forum_crossover_posts", crossoverPosts); renderCross(); }
@@ -1113,7 +1129,9 @@ ${scopeHint}
         } catch (err) {
           console.error(err);
           showError(err.message || String(err), err.raw || '');
-        } finally { loadingMask.style.display = 'none'; }
+        } finally {
+          loadingMask.style.display = 'none';
+        }
       };
 
       $('#forum-exit').onclick = () => roche.ui.closeApp();
