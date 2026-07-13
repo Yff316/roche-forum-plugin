@@ -1,14 +1,12 @@
 window.RochePlugin.register({
   id: "minimalist-forum",
   name: "极简论坛",
-  version: "1.8.0",
+  version: "1.8.1",
   apps: [{
     id: "minimalist-forum-app",
     name: "论坛主页",
     icon: "chat",
     async mount(container, roche) {
-
-      // ========== 1. 初始化数据 ==========
       const defaultWorldView = `围绕着游戏/动漫角色本人发帖（崩铁、原神、鸣潮、绝区零、王者、龙族、夜幕之下、斩神、诡秘之主、排球少年、蓝色监狱、死亡笔记、盗墓笔记、咒术回战、夏目友人帐、银魂、鬼灭之刃、坂本日常、电锯人等）。
 $禁止OOC，严格遵循官方人设。
 $角色全洁，从身到心，只喜欢user一人，不论男女。
@@ -19,24 +17,14 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
 要有活人感，emoji由你根据角色人设自行判断是否使用（🤤😂🙄🤣😭😉都允许，但不要每帖都加）。`;
 
       let settings = (await roche.storage.get("forum_settings")) || {
-        worldView: defaultWorldView,
-        postCount: 3,
-        commentCount: 5,
-        themeStyle: "line",
-        themeColor: "#000000",
-        apiUrl: "https://api.openai.com/v1/chat/completions",
-        apiKey: "",
+        worldView: defaultWorldView, postCount: 3, commentCount: 5,
+        themeStyle: "line", themeColor: "#000000",
+        apiUrl: "https://api.openai.com/v1/chat/completions", apiKey: "",
         memoryReadCount: 5
       };
-
       let userProfile = (await roche.storage.get("forum_user")) || {
-        forumName: "旅行者",
-        avatarUrl: "",
-        name: "真名",
-        age: "未知",
-        appearance: "神秘而迷人"
+        forumName: "旅行者", avatarUrl: "", name: "真名", age: "未知", appearance: "神秘而迷人"
       };
-
       let posts = (await roche.storage.get("forum_posts")) || [];
       let crossoverPosts = (await roche.storage.get("forum_crossover_posts")) || [];
       let ifPosts = (await roche.storage.get("forum_if_posts")) || [];
@@ -45,37 +33,13 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
       let memoryIf = (await roche.storage.get("forum_memory_if")) || [];
       let favorites = (await roche.storage.get("forum_favorites")) || [];
 
-      // ========== 2. CSS ==========
       const style = document.createElement('style');
       style.id = "minimalist-forum-style";
       style.innerHTML = `
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond&display=swap');
-        :root {
-          --primary-color:${settings.themeColor};
-          --bg-color:#fff;
-          --card-bg:#fff;
-          --border-radius:0;
-          --border-style:2px solid var(--primary-color);
-          --box-shadow:4px 4px 0 var(--primary-color);
-          --avatar-color:#000;
-          --font-text:'Optima','Cormorant Garamond','PingFang SC','Microsoft YaHei',serif;
-        }
-        .theme-water {
-          --primary-color:#a3b8cc;
-          --bg-color:#f2f7fb;
-          --border-radius:16px;
-          --border-style:1px solid rgba(163,184,204,0.4);
-          --box-shadow:0 4px 15px rgba(163,184,204,0.15);
-          --avatar-color:#fff;
-        }
-        .theme-food {
-          --primary-color:#fcaebf;
-          --bg-color:#fdf5f7;
-          --border-radius:24px;
-          --border-style:2px dashed #fcaebf;
-          --box-shadow:0 6px 20px rgba(252,174,191,0.2);
-          --avatar-color:#fff;
-        }
+        :root { --primary-color:${settings.themeColor}; --bg-color:#fff; --card-bg:#fff; --border-radius:0; --border-style:2px solid var(--primary-color); --box-shadow:4px 4px 0 var(--primary-color); --avatar-color:#000; --font-text:'Optima','Cormorant Garamond','PingFang SC','Microsoft YaHei',serif; }
+        .theme-water { --primary-color:#a3b8cc; --bg-color:#f2f7fb; --border-radius:16px; --border-style:1px solid rgba(163,184,204,0.4); --box-shadow:0 4px 15px rgba(163,184,204,0.15); --avatar-color:#fff; }
+        .theme-food { --primary-color:#fcaebf; --bg-color:#fdf5f7; --border-radius:24px; --border-style:2px dashed #fcaebf; --box-shadow:0 6px 20px rgba(252,174,191,0.2); --avatar-color:#fff; }
         .roche-plugin-forum { font-family:var(--font-text); display:flex; flex-direction:column; height:100%; background:var(--bg-color); color:#333; position:relative; overflow:hidden; }
         .forum-header { display:flex; justify-content:space-between; align-items:center; padding:16px; background:var(--bg-color); border-bottom:var(--border-style); z-index:5; }
         .forum-header button { background:none; border:none; font-size:24px; font-weight:bold; cursor:pointer; color:var(--primary-color); font-family:var(--font-text); }
@@ -123,17 +87,18 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         .decor { display:none; position:absolute; font-size:24px; opacity:0.5; pointer-events:none; }
         .theme-water .decor-water { display:block; color:rgba(163,184,204,0.4); }
         .theme-food .decor-food { display:block; }
+        .api-status { font-size:12px; margin-top:6px; padding:6px 10px; border-radius:6px; font-weight:bold; }
+        .api-status.ok { background:#e6ffe6; color:#2d7a2d; }
+        .api-status.fail { background:#ffe6e6; color:#c0392b; }
       `;
       document.head.appendChild(style);
 
-      // ========== 3. HTML ==========
       container.innerHTML = `
         <div class="roche-plugin-forum ${settings.themeStyle !== 'line' ? 'theme-' + settings.themeStyle : ''}" id="main-container">
           <div class="decor decor-water" style="top:10%;left:5%">♡</div>
           <div class="decor decor-food" style="top:15%;left:8%">🍡</div>
           <div class="decor decor-food" style="top:50%;right:10%">🍧</div>
           <div class="decor decor-food" style="bottom:20%;left:12%">🍬</div>
-
           <div class="forum-header">
             <button id="forum-exit">&lt;</button>
             <div id="header-title" style="font-weight:bold;font-size:18px;text-transform:uppercase;">FORUM</div>
@@ -149,7 +114,7 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
             <div class="forum-content" id="forum-feed-container"></div>
           </div>
 
-          <!-- 板块（跨界 / if） -->
+          <!-- 板块 -->
           <div id="view-crossover" class="page-view">
             <div class="my-tabs" style="border-bottom:var(--border-style);">
               <button data-bk="cross" class="active">🌌 跨界大乱炖</button>
@@ -224,11 +189,14 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
               <div class="form-section">
                 <h4 data-toggle="api">API 与生成配置 <span>▾</span></h4>
                 <div class="collapsible-body" data-body="api">
+                  <p style="font-size:13px;color:#888;margin:0 0 8px;">优先使用 Roche 内置 AI，若失败或未配置则使用下方自定义 API。</p>
                   <label>帖子数:<input type="number" id="set-post-count" value="${settings.postCount}" min="1" max="10"></label>
                   <label>评论数:<input type="number" id="set-comment-count" value="${settings.commentCount}" min="0" max="15"></label>
                   <label>记忆读取条数:<input type="number" id="set-memory-count" value="${settings.memoryReadCount}" min="0" max="30"></label>
-                  <label>API 地址:<input type="text" id="set-api-url" value="${settings.apiUrl}"></label>
-                  <label>API 密钥:<input type="password" id="set-api-key" value="${settings.apiKey}"></label>
+                  <label>自定义 API 地址 (备用):<input type="text" id="set-api-url" value="${settings.apiUrl}"></label>
+                  <label>自定义 API 密钥 (备用):<input type="password" id="set-api-key" value="${settings.apiKey}"></label>
+                  <button class="btn-secondary" id="btn-test-api" style="width:100%;margin-top:8px;">🔗 测试自定义 API 连接</button>
+                  <div id="api-test-result"></div>
                 </div>
               </div>
               <div class="form-section">
@@ -311,20 +279,8 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
       const loadingText = $('#loading-text');
 
       // ========== 页面切换 ==========
-      const views = {
-        feed: $('#view-feed'),
-        crossover: $('#view-crossover'),
-        msg: $('#view-msg'),
-        user: $('#view-user'),
-        settings: $('#view-settings')
-      };
-      const navBtns = {
-        feed: $('#nav-home'),
-        crossover: $('#nav-crossover'),
-        msg: $('#nav-msg'),
-        user: $('#nav-user-page'),
-        settings: $('#nav-settings')
-      };
+      const views = { feed: $('#view-feed'), crossover: $('#view-crossover'), msg: $('#view-msg'), user: $('#view-user'), settings: $('#view-settings') };
+      const navBtns = { feed: $('#nav-home'), crossover: $('#nav-crossover'), msg: $('#nav-msg'), user: $('#nav-user-page'), settings: $('#nav-settings') };
       const header = $('#header-title');
       let currentMode = 'feed';
       let boardSub = 'cross';
@@ -337,7 +293,6 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         navBtns[name].classList.add('active');
         if (name === 'feed' || name === 'crossover') currentMode = name;
       };
-
       navBtns.feed.onclick = () => { switchView('feed', 'FORUM'); renderFeed(); };
       navBtns.crossover.onclick = () => { switchView('crossover', 'BOARD'); boardSub === 'cross' ? renderCross() : renderIf(); };
       navBtns.msg.onclick = () => switchView('msg', 'MESSAGES');
@@ -380,16 +335,12 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
 
       // ========== 工具 ==========
       const fileToBase64 = (file) => new Promise((res, rej) => {
-        const r = new FileReader();
-        r.readAsDataURL(file);
-        r.onload = () => res(r.result);
-        r.onerror = rej;
+        const r = new FileReader(); r.readAsDataURL(file); r.onload = () => res(r.result); r.onerror = rej;
       });
       const nowStr = () => new Date().toLocaleString('zh-CN', { hour12: false });
       const moodPool = ["有点困", "心情愉悦", "略有烦躁", "突然想念你", "小雀跃", "静静发呆", "被工作烦到", "突然想撒娇", "有点吃醋", "心跳加速"];
       const currentMood = () => moodPool[new Date().getMinutes() % moodPool.length];
 
-      // 根据 postId 找所属数组
       const locatePost = (id) => {
         if (posts.find(x => x.id === id)) return { arr: posts, key: 'forum_posts', kind: 'feed' };
         if (crossoverPosts.find(x => x.id === id)) return { arr: crossoverPosts, key: 'forum_crossover_posts', kind: 'cross' };
@@ -397,70 +348,69 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
         return null;
       };
 
+      // ========== AI 调用（优先 Roche 内置，失败再用自定义 API）==========
+      const callAI = async (prompt) => {
+        // 1. 优先尝试 Roche 内置 AI
+        try {
+          const r = await roche.ai.chat({ messages: [{ role: "user", content: prompt }], temperature: 0.85 });
+          if (r && r.text) return r.text.trim();
+        } catch (e) {
+          console.warn("Roche 内置 AI 失败，尝试自定义 API...", e);
+        }
+        // 2. 内置失败，尝试自定义 API
+        if (settings.apiUrl && settings.apiKey) {
+          const res = await fetch(settings.apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
+            body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], temperature: 0.85 })
+          });
+          const data = await res.json();
+          return data.choices[0].message.content.trim();
+        }
+        throw new Error("Roche 内置 AI 和自定义 API 均不可用，请检查配置。");
+      };
+
       // ========== 渲染列表 ==========
       const renderList = (el, data) => {
         el.innerHTML = '';
-        if (data.length === 0) {
-          el.innerHTML = '<div style="text-align:center;margin-top:50px;font-weight:bold;color:var(--primary-color);">暂无动态，点击右上角 ↻ 刷新生成</div>';
-          return;
-        }
+        if (data.length === 0) { el.innerHTML = '<div style="text-align:center;margin-top:50px;font-weight:bold;color:var(--primary-color);">暂无动态，点击右上角 ↻ 刷新生成</div>'; return; }
         data.forEach(post => {
           const d = document.createElement('div');
           d.className = 'forum-post';
           const likes = post.likes ?? 0, stars = post.stars ?? 0, cc = post.comments?.length || 0;
-          d.innerHTML = `
-            <div class="post-header"><div class="bw-avatar"></div><div class="post-author">@${post.author}</div></div>
-            <div class="post-text collapsed">${post.content}</div>
-            <div class="post-stats">——♡${likes} ★${stars} ＞${cc}</div>
-          `;
+          d.innerHTML = `<div class="post-header"><div class="bw-avatar"></div><div class="post-author">@${post.author}</div></div><div class="post-text collapsed">${post.content}</div><div class="post-stats">——♡${likes} ★${stars} ＞${cc}</div>`;
           d.onclick = () => openDetail(post.id);
           el.appendChild(d);
         });
       };
-
       const renderFeed = () => renderList($('#forum-feed-container'), posts);
       const renderCross = () => renderList($('#crossover-feed-container'), crossoverPosts);
       const renderIf = () => renderList($('#if-feed-container'), ifPosts);
 
-      // 我的动态
       const renderMine = () => {
         const mineC = $('#mine-container');
         const mine = [...posts, ...crossoverPosts, ...ifPosts].filter(p => p.author === userProfile.forumName);
         if (mine.length === 0) { mineC.innerHTML = '<div style="text-align:center;color:#888;padding:40px;">你还没有发过帖子</div>'; return; }
         mineC.innerHTML = '';
         mine.forEach(p => {
-          const d = document.createElement('div');
-          d.className = 'forum-post';
+          const d = document.createElement('div'); d.className = 'forum-post';
           d.innerHTML = `<div class="post-header"><div class="bw-avatar"></div><div class="post-author">@${p.author}</div></div><div class="post-text collapsed">${p.content}</div><div class="post-stats">${p.comments?.length || 0} 条回复</div>`;
-          d.onclick = () => openDetail(p.id);
-          mineC.appendChild(d);
+          d.onclick = () => openDetail(p.id); mineC.appendChild(d);
         });
       };
 
-      // 收藏
       const renderFav = () => {
         const favC = $('#fav-container');
         if (favorites.length === 0) { favC.innerHTML = '<div style="text-align:center;color:#888;padding:40px;">暂无收藏</div>'; return; }
         favC.innerHTML = '';
         favorites.forEach(f => {
-          const d = document.createElement('div');
-          d.className = 'forum-post';
-          d.innerHTML = `
-            <div class="post-header"><div class="bw-avatar"></div><div class="post-author">@${f.author}</div></div>
-            <div class="post-text collapsed">${f.content}</div>
-            <div class="post-stats" style="color:#ff4d4f;cursor:pointer;">✕ 取消收藏</div>
-          `;
+          const d = document.createElement('div'); d.className = 'forum-post';
+          d.innerHTML = `<div class="post-header"><div class="bw-avatar"></div><div class="post-author">@${f.author}</div></div><div class="post-text collapsed">${f.content}</div><div class="post-stats" style="color:#ff4d4f;cursor:pointer;">✕ 取消收藏</div>`;
           d.querySelector('.post-stats').onclick = async (e) => {
-            e.stopPropagation();
-            favorites = favorites.filter(x => x.id !== f.id);
-            await roche.storage.set("forum_favorites", favorites);
-            renderFav();
-            roche.ui.toast("已取消收藏");
+            e.stopPropagation(); favorites = favorites.filter(x => x.id !== f.id);
+            await roche.storage.set("forum_favorites", favorites); renderFav(); roche.ui.toast("已取消收藏");
           };
-          d.onclick = () => {
-            if (locatePost(f.id)) openDetail(f.id);
-            else roche.ui.toast("原帖已被删除");
-          };
+          d.onclick = () => { if (locatePost(f.id)) openDetail(f.id); else roche.ui.toast("原帖已被删除"); };
           favC.appendChild(d);
         });
       };
@@ -469,225 +419,137 @@ $禁止发图片，禁止使用[翻开照片：xxx]这种描述。
       const detailView = $('#view-post-detail');
       const detailC = $('#detail-content-container');
       let curPostId = null;
-
       $('#detail-back').onclick = () => detailView.style.display = 'none';
 
       const openDetail = (id) => {
-        const loc = locatePost(id);
-        if (!loc) return;
+        const loc = locatePost(id); if (!loc) return;
         curPostId = id;
         const p = loc.arr.find(x => x.id === id);
         const likes = p.likes ?? 0, stars = p.stars ?? 0, cc = p.comments?.length || 0;
-        let html = `
-          <div style="display:flex;align-items:center;margin-bottom:8px;">
-            <div class="bw-avatar"></div><div class="skeleton-author">@${p.author}</div>
-          </div>
-          <div style="white-space:pre-wrap;">${p.content}</div>
-          <div class="skeleton-stats">——♡${likes} ★${stars} ＞${cc}</div>
-          <div style="color:var(--primary-color);">|<br>|</div>
-        `;
+        let html = `<div style="display:flex;align-items:center;margin-bottom:8px;"><div class="bw-avatar"></div><div class="skeleton-author">@${p.author}</div></div><div style="white-space:pre-wrap;">${p.content}</div><div class="skeleton-stats">——♡${likes} ★${stars} ＞${cc}</div><div style="color:var(--primary-color);">|<br>|</div>`;
         if (p.comments?.length) {
-          p.comments.forEach(c => {
-            html += `
-              <div class="skeleton-comment">
-                <div class="bw-avatar small"></div>
-                <div><span class="skeleton-author">@${c.author}</span><br><span>${c.content}</span></div>
-              </div>
-            `;
-          });
-        } else {
-          html += `<div style="color:#888;margin-left:10px;">暂无评论</div>`;
-        }
+          p.comments.forEach(c => { html += `<div class="skeleton-comment"><div class="bw-avatar small"></div><div><span class="skeleton-author">@${c.author}</span><br><span>${c.content}</span></div></div>`; });
+        } else { html += `<div style="color:#888;margin-left:10px;">暂无评论</div>`; }
         detailC.innerHTML = html;
         $('#detail-fav').innerText = favorites.some(f => f.id === p.id) ? '★' : '☆';
         detailView.style.display = 'flex';
       };
 
-      // 编辑（任何帖子都可以编辑）
       let editingId = null;
       $('#detail-edit').onclick = () => {
-        const loc = locatePost(curPostId);
-        if (!loc) return;
+        const loc = locatePost(curPostId); if (!loc) return;
         const p = loc.arr.find(x => x.id === curPostId);
-        editingId = p.id;
-        $('#user-post-content').value = p.content;
+        editingId = p.id; $('#user-post-content').value = p.content;
         $('#post-modal-title').innerText = p.author === userProfile.forumName ? '编辑动态' : `编辑 @${p.author} 的帖子`;
         $('#modal-post').style.display = 'flex';
       };
 
-      // 删除
       $('#detail-delete').onclick = async () => {
-        const ok = await roche.ui.confirm({ title: "删除", message: "确认删除这条帖子？" });
-        if (!ok) return;
-        const loc = locatePost(curPostId);
-        if (!loc) return;
+        const ok = await roche.ui.confirm({ title: "删除", message: "确认删除这条帖子？" }); if (!ok) return;
+        const loc = locatePost(curPostId); if (!loc) return;
         const filtered = loc.arr.filter(x => x.id !== curPostId);
-        if (loc.kind === 'feed') posts = filtered;
-        else if (loc.kind === 'cross') crossoverPosts = filtered;
-        else ifPosts = filtered;
+        if (loc.kind === 'feed') posts = filtered; else if (loc.kind === 'cross') crossoverPosts = filtered; else ifPosts = filtered;
         await roche.storage.set(loc.key, filtered);
         detailView.style.display = 'none';
-        if (loc.kind === 'feed') renderFeed();
-        else if (loc.kind === 'cross') renderCross();
-        else renderIf();
+        if (loc.kind === 'feed') renderFeed(); else if (loc.kind === 'cross') renderCross(); else renderIf();
       };
 
-      // 收藏 / 取消
       $('#detail-fav').onclick = async () => {
-        const loc = locatePost(curPostId);
-        if (!loc) return;
+        const loc = locatePost(curPostId); if (!loc) return;
         const p = loc.arr.find(x => x.id === curPostId);
         const idx = favorites.findIndex(f => f.id === p.id);
-        if (idx >= 0) {
-          favorites.splice(idx, 1);
-          $('#detail-fav').innerText = '☆';
-          roche.ui.toast("已取消收藏");
-        } else {
-          favorites.unshift({ id: p.id, author: p.author, content: p.content });
-          $('#detail-fav').innerText = '★';
-          roche.ui.toast("已收藏 ★");
-        }
+        if (idx >= 0) { favorites.splice(idx, 1); $('#detail-fav').innerText = '☆'; roche.ui.toast("已取消收藏"); }
+        else { favorites.unshift({ id: p.id, author: p.author, content: p.content }); $('#detail-fav').innerText = '★'; roche.ui.toast("已收藏 ★"); }
         await roche.storage.set("forum_favorites", favorites);
       };
 
-      // 用户回复 + 自动召唤
       const commentInput = $('#detail-comment-input');
       $('#detail-comment-send').onclick = async () => {
-        const t = commentInput.value.trim();
-        if (!t) return;
-        const loc = locatePost(curPostId);
-        if (!loc) return;
+        const t = commentInput.value.trim(); if (!t) return;
+        const loc = locatePost(curPostId); if (!loc) return;
         const p = loc.arr.find(x => x.id === curPostId);
-        p.comments = p.comments || [];
-        p.comments.push({ author: userProfile.forumName, content: t });
-        commentInput.value = '';
-        openDetail(p.id);
-        await roche.storage.set(loc.key, loc.arr);
-        loadingText.innerText = "正在呼唤角色回复...";
-        loadingMask.style.display = 'flex';
+        p.comments = p.comments || []; p.comments.push({ author: userProfile.forumName, content: t });
+        commentInput.value = ''; openDetail(p.id); await roche.storage.set(loc.key, loc.arr);
+        loadingText.innerText = "正在呼唤角色回复..."; loadingMask.style.display = 'flex';
         try {
-          const scopeHint = loc.kind === 'feed'
-            ? '请扮演原帖作者本人，或同世界观其他角色回复。禁止其他世界观角色出现。'
-            : loc.kind === 'cross'
-            ? '这是【跨界大乱炖】板块，允许不同世界观角色跨界串门评论。'
-            : '这是【if 线】板块，帖主与 user 已经在恋爱/婚后。评论区必须是与帖主同一个世界观的角色。';
-          const prompt = `你是论坛模拟器。用户（@${userProfile.forumName}，真名/爱称[${userProfile.name}]）刚刚在帖子下评论了。
-原帖作者：@${p.author}
-原帖内容：${p.content}
-用户评论：${t}
-${scopeHint}
-生成 1~2 条角色回复。严格遵循官方人设，禁止OOC，禁止图片描述。emoji按人设自行判断。
-角色当前心情:${currentMood()}。
-输出纯JSON数组:[{"author":"角色名","content":"@${userProfile.forumName} 回复内容"}]`;
+          const scopeHint = loc.kind === 'feed' ? '请扮演原帖作者本人，或同世界观其他角色回复。禁止其他世界观角色出现。' : loc.kind === 'cross' ? '这是【跨界大乱炖】板块，允许不同世界观角色跨界串门评论。' : '这是【if 线】板块，评论区必须是与帖主同一个世界观的角色。';
+          const prompt = `你是论坛模拟器。用户（@${userProfile.forumName}，真名/爱称[${userProfile.name}]）刚刚在帖子下评论了。\n原帖作者：@${p.author}\n原帖内容：${p.content}\n用户评论：${t}\n${scopeHint}\n生成 1~2 条角色回复。严格遵循官方人设，禁止OOC，禁止图片描述。emoji按人设自行判断。角色当前心情:${currentMood()}。\n输出纯JSON数组:[{"author":"角色名","content":"@${userProfile.forumName} 回复内容"}]`;
           const raw = await callAI(prompt);
           const replies = JSON.parse(raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1));
-          p.comments = p.comments.concat(replies);
-          await roche.storage.set(loc.key, loc.arr);
-          openDetail(p.id);
-        } catch (e) {
-          roche.ui.toast("角色暂时没回复");
-        } finally {
-          loadingMask.style.display = 'none';
-        }
+          p.comments = p.comments.concat(replies); await roche.storage.set(loc.key, loc.arr); openDetail(p.id);
+        } catch (e) { roche.ui.toast("角色暂时没回复"); } finally { loadingMask.style.display = 'none'; }
       };
 
-      // 手动召唤
       $('#detail-comment-summon').onclick = async () => {
-        const loc = locatePost(curPostId);
-        if (!loc) return;
+        const loc = locatePost(curPostId); if (!loc) return;
         const p = loc.arr.find(x => x.id === curPostId);
-        loadingText.innerText = "正在召唤角色...";
-        loadingMask.style.display = 'flex';
+        loadingText.innerText = "正在召唤角色..."; loadingMask.style.display = 'flex';
         try {
           const existing = (p.comments || []).map(c => `@${c.author}: ${c.content}`).join('\n') || '（无）';
-          const scopeHint = loc.kind === 'feed'
-            ? '只允许同世界观角色出现。'
-            : loc.kind === 'cross'
-            ? '【跨界大乱炖】板块，允许跨界角色出现。'
-            : '【if 线】板块，评论必须来自帖主同一个世界观的角色。';
-          const prompt = `你是论坛模拟器，请为下列帖子生成 1~2 条新的角色评论/回复（可回复贴主或已有评论）。
-【帖子作者】@${p.author}
-【帖子内容】${p.content}
-【已有评论】\n${existing}
-【用户】@${userProfile.forumName}，真名/爱称[${userProfile.name}]
-${scopeHint}
-角色当前心情:${currentMood()}。严格遵循官方人设，禁止OOC，禁止图片描述。
-输出纯JSON数组:[{"author":"角色名","content":"@某人 回复内容"}]`;
+          const scopeHint = loc.kind === 'feed' ? '只允许同世界观角色出现。' : loc.kind === 'cross' ? '【跨界大乱炖】板块，允许跨界角色出现。' : '【if 线】板块，评论必须来自帖主同一个世界观的角色。';
+          const prompt = `你是论坛模拟器，请为下列帖子生成 1~2 条新的角色评论/回复（可回复贴主或已有评论）。\n【帖子作者】@${p.author}\n【帖子内容】${p.content}\n【已有评论】\n${existing}\n【用户】@${userProfile.forumName}，真名/爱称[${userProfile.name}]\n${scopeHint}\n角色当前心情:${currentMood()}。严格遵循官方人设，禁止OOC，禁止图片描述。\n输出纯JSON数组:[{"author":"角色名","content":"@某人 回复内容"}]`;
           const raw = await callAI(prompt);
           const replies = JSON.parse(raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1));
-          p.comments = (p.comments || []).concat(replies);
-          await roche.storage.set(loc.key, loc.arr);
-          openDetail(p.id);
-          roche.ui.toast("角色赶来了");
-        } catch (e) {
-          roche.ui.toast("召唤失败，请重试");
-        } finally {
-          loadingMask.style.display = 'none';
-        }
+          p.comments = (p.comments || []).concat(replies); await roche.storage.set(loc.key, loc.arr); openDetail(p.id); roche.ui.toast("角色赶来了");
+        } catch (e) { roche.ui.toast("召唤失败，请重试"); } finally { loadingMask.style.display = 'none'; }
       };
 
       // ========== 发帖 ==========
       const modalPost = $('#modal-post');
-      $('#btn-user-post').onclick = () => {
-        editingId = null;
-        $('#user-post-content').value = '';
-        $('#post-modal-title').innerText = '发布动态';
-        modalPost.style.display = 'flex';
-      };
+      $('#btn-user-post').onclick = () => { editingId = null; $('#user-post-content').value = ''; $('#post-modal-title').innerText = '发布动态'; modalPost.style.display = 'flex'; };
       $('#post-cancel').onclick = () => modalPost.style.display = 'none';
       $('#post-submit').onclick = async () => {
-        const c = $('#user-post-content').value.trim();
-        if (!c) return roche.ui.toast("内容不能为空");
+        const c = $('#user-post-content').value.trim(); if (!c) return roche.ui.toast("内容不能为空");
         if (editingId) {
           const loc = locatePost(editingId);
-          if (loc) {
-            const p = loc.arr.find(x => x.id === editingId);
-            p.content = c;
-            await roche.storage.set(loc.key, loc.arr);
-            openDetail(p.id);
-          }
+          if (loc) { const p = loc.arr.find(x => x.id === editingId); p.content = c; await roche.storage.set(loc.key, loc.arr); openDetail(p.id); }
         } else {
           const np = { id: crypto.randomUUID(), author: userProfile.forumName, content: c, comments: [], likes: 0, stars: 0 };
           if (currentMode === 'feed') { posts.unshift(np); await roche.storage.set("forum_posts", posts); renderFeed(); }
           else if (boardSub === 'cross') { crossoverPosts.unshift(np); await roche.storage.set("forum_crossover_posts", crossoverPosts); renderCross(); }
           else { ifPosts.unshift(np); await roche.storage.set("forum_if_posts", ifPosts); renderIf(); }
         }
-        modalPost.style.display = 'none';
-        roche.ui.toast("已保存");
+        modalPost.style.display = 'none'; roche.ui.toast("已保存");
       };
 
       // ========== 用户资料 ==========
-      $('#user-avatar-file').onchange = async (e) => {
-        if (e.target.files?.[0]) {
-          const b64 = await fileToBase64(e.target.files[0]);
-          $('#user-avatar-url').value = b64;
-        }
-      };
+      $('#user-avatar-file').onchange = async (e) => { if (e.target.files?.[0]) { const b64 = await fileToBase64(e.target.files[0]); $('#user-avatar-url').value = b64; } };
       $('#user-save').onclick = async () => {
-        userProfile.forumName = $('#user-forum-name').value;
-        userProfile.avatarUrl = $('#user-avatar-url').value;
-        userProfile.name = $('#user-name').value;
-        userProfile.age = $('#user-age').value;
-        userProfile.appearance = $('#user-appearance').value;
+        userProfile.forumName = $('#user-forum-name').value; userProfile.avatarUrl = $('#user-avatar-url').value;
+        userProfile.name = $('#user-name').value; userProfile.age = $('#user-age').value; userProfile.appearance = $('#user-appearance').value;
         await roche.storage.set("forum_user", userProfile);
-        $('#feed-user-name').innerText = `@${userProfile.forumName}`;
-        $('#user-display-name').innerText = `@${userProfile.forumName}`;
+        $('#feed-user-name').innerText = `@${userProfile.forumName}`; $('#user-display-name').innerText = `@${userProfile.forumName}`;
         if (userProfile.avatarUrl) $('#user-avatar-display').style.backgroundImage = `url(${userProfile.avatarUrl})`;
         roche.ui.toast("资料已保存");
       };
 
+      // ========== 测试 API ==========
+      $('#btn-test-api').onclick = async () => {
+        const resultEl = $('#api-test-result');
+        resultEl.innerHTML = '<div class="api-status" style="background:#fff3cd;color:#856404;">测试中...</div>';
+        try {
+          const url = $('#set-api-url').value;
+          const key = $('#set-api-key').value;
+          if (!url || !key) { resultEl.innerHTML = '<div class="api-status fail">请先填写 API 地址和密钥</div>'; return; }
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+            body: JSON.stringify({ model: "gpt-3.5-turbo", messages: [{ role: "user", content: "hi" }], max_tokens: 5 })
+          });
+          if (res.ok) resultEl.innerHTML = '<div class="api-status ok">✅ 自定义 API 连接成功！</div>';
+          else resultEl.innerHTML = `<div class="api-status fail">❌ 连接失败，状态码：${res.status}</div>`;
+        } catch (e) { resultEl.innerHTML = '<div class="api-status fail">❌ 网络错误，请检查地址格式</div>'; }
+      };
+
       // ========== 设置保存 & 清理 ==========
       $('#settings-save').onclick = async () => {
-        settings.themeStyle = $('#theme-style').value;
-        settings.themeColor = $('#theme-color').value;
+        settings.themeStyle = $('#theme-style').value; settings.themeColor = $('#theme-color').value;
         settings.worldView = $('#set-worldview').value;
         settings.postCount = parseInt($('#set-post-count').value) || 3;
         settings.commentCount = parseInt($('#set-comment-count').value) || 5;
         settings.memoryReadCount = parseInt($('#set-memory-count').value) || 5;
-        settings.apiUrl = $('#set-api-url').value;
-        settings.apiKey = $('#set-api-key').value;
-        await roche.storage.set("forum_settings", settings);
-        roche.ui.toast("设置已保存");
+        settings.apiUrl = $('#set-api-url').value; settings.apiKey = $('#set-api-key').value;
+        await roche.storage.set("forum_settings", settings); roche.ui.toast("设置已保存");
       };
       $('#clear-home').onclick = async () => { posts = []; await roche.storage.set("forum_posts", posts); renderFeed(); roche.ui.toast("主页已清空"); };
       $('#clear-cross').onclick = async () => { crossoverPosts = []; await roche.storage.set("forum_crossover_posts", crossoverPosts); renderCross(); roche.ui.toast("跨界已清空"); };
@@ -696,18 +558,13 @@ ${scopeHint}
         posts = posts.filter(p => p.author !== userProfile.forumName);
         crossoverPosts = crossoverPosts.filter(p => p.author !== userProfile.forumName);
         ifPosts = ifPosts.filter(p => p.author !== userProfile.forumName);
-        await roche.storage.set("forum_posts", posts);
-        await roche.storage.set("forum_crossover_posts", crossoverPosts);
-        await roche.storage.set("forum_if_posts", ifPosts);
+        await roche.storage.set("forum_posts", posts); await roche.storage.set("forum_crossover_posts", crossoverPosts); await roche.storage.set("forum_if_posts", ifPosts);
         roche.ui.toast("你的帖子已清空");
       };
       $('#clear-mem').onclick = async () => {
         memoryFeed = []; memoryCross = []; memoryIf = [];
-        await roche.storage.set("forum_memory_feed", memoryFeed);
-        await roche.storage.set("forum_memory_cross", memoryCross);
-        await roche.storage.set("forum_memory_if", memoryIf);
-        renderMemoryLists();
-        roche.ui.toast("记忆已清空");
+        await roche.storage.set("forum_memory_feed", memoryFeed); await roche.storage.set("forum_memory_cross", memoryCross); await roche.storage.set("forum_memory_if", memoryIf);
+        renderMemoryLists(); roche.ui.toast("记忆已清空");
       };
 
       // ========== 记忆 ==========
@@ -720,8 +577,7 @@ ${scopeHint}
       const summarize = async (which) => {
         const src = which === 'feed' ? posts : which === 'cross' ? crossoverPosts : ifPosts;
         if (src.length === 0) return roche.ui.toast("没有可总结的帖子");
-        loadingText.innerText = "正在总结...";
-        loadingMask.style.display = 'flex';
+        loadingText.innerText = "正在总结..."; loadingMask.style.display = 'flex';
         try {
           const text = src.slice(0, 10).map(p => `@${p.author}: ${p.content}`).join('\n');
           const raw = await callAI(`请用一句简短的中文总结以下论坛帖子的整体情况和主要事件（时间线清晰，不超过80字）：\n${text}`);
@@ -729,117 +585,49 @@ ${scopeHint}
           if (which === 'feed') { memoryFeed.unshift(mem); memoryFeed = memoryFeed.slice(0, 30); await roche.storage.set("forum_memory_feed", memoryFeed); }
           else if (which === 'cross') { memoryCross.unshift(mem); memoryCross = memoryCross.slice(0, 30); await roche.storage.set("forum_memory_cross", memoryCross); }
           else { memoryIf.unshift(mem); memoryIf = memoryIf.slice(0, 30); await roche.storage.set("forum_memory_if", memoryIf); }
-          renderMemoryLists();
-          roche.ui.toast("已生成记忆");
-        } catch (e) { roche.ui.toast("总结失败"); }
-        finally { loadingMask.style.display = 'none'; }
+          renderMemoryLists(); roche.ui.toast("已生成记忆");
+        } catch (e) { roche.ui.toast("总结失败"); } finally { loadingMask.style.display = 'none'; }
       };
       $('#btn-mem-feed').onclick = () => summarize('feed');
       $('#btn-mem-cross').onclick = () => summarize('cross');
       $('#btn-mem-if').onclick = () => summarize('if');
 
-      // ========== AI 调用 ==========
-      const callAI = async (prompt) => {
-        let raw = '';
-        if (settings.apiUrl && settings.apiKey) {
-          const res = await fetch(settings.apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
-            body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], temperature: 0.85 })
-          });
-          const data = await res.json();
-          raw = data.choices[0].message.content;
-        } else {
-          const r = await roche.ai.chat({ messages: [{ role: "user", content: prompt }], temperature: 0.85 });
-          raw = r.text;
-        }
-        return raw.trim();
-      };
-
       // ========== 刷新生成 ==========
       $('#nav-refresh').onclick = async () => {
         if (currentMode !== 'feed' && currentMode !== 'crossover') switchView('feed', 'FORUM');
-        loadingText.innerText = "正在捕捉时空交汇的电波...";
-        loadingMask.style.display = 'flex';
+        loadingText.innerText = "正在捕捉时空交汇的电波..."; loadingMask.style.display = 'flex';
         try {
           const memArr = currentMode === 'feed' ? memoryFeed : (boardSub === 'if' ? memoryIf : memoryCross);
           const recentSrc = currentMode === 'feed' ? posts : (boardSub === 'if' ? ifPosts : crossoverPosts);
           const recentPosts = recentSrc.slice(0, settings.memoryReadCount);
           const memText = memArr.slice(0, 3).map(m => `[${m.time}] ${m.summary}`).join('\n') || '（无）';
           const recentText = recentPosts.map(p => `@${p.author}: ${p.content.slice(0, 60)}`).join('\n') || '（无）';
-
-          const basePrompt = `【世界观】：\n${settings.worldView}
-【用户情报】：网名 @${userProfile.forumName}，真名/爱称[${userProfile.name}]，年龄${userProfile.age}，外貌：${userProfile.appearance}。
-【论坛记忆】：\n${memText}
-【最近${recentPosts.length}条帖子参考】：\n${recentText}
-【发帖硬性规则】：
-- 严格遵循官方人设，禁止OOC。
-- 禁止图片描述，禁止使用[翻开照片:xxx]。
-- 每个角色发帖时假设有当前心情（如${currentMood()}），要有活人感、随手记录感。
-- emoji（🤤😂🙄🤣😭😉）根据人设自行判断是否使用，不强制不禁止，不要每帖都加。`;
+          const basePrompt = `【世界观】：\n${settings.worldView}\n【用户情报】：网名 @${userProfile.forumName}，真名/爱称[${userProfile.name}]，年龄${userProfile.age}，外貌：${userProfile.appearance}。\n【论坛记忆】：\n${memText}\n【最近${recentPosts.length}条帖子参考】：\n${recentText}\n【发帖硬性规则】：\n- 严格遵循官方人设，禁止OOC。\n- 禁止图片描述，禁止使用[翻开照片:xxx]。\n- 每个角色发帖时假设有当前心情（如${currentMood()}），要有活人感、随手记录感。\n- emoji（🤤😂🙄🤣😭😉）根据人设自行判断是否使用，不强制不禁止，不要每帖都加。`;
 
           let prompt;
           if (currentMode === 'feed') {
-            prompt = `${basePrompt}
-主题限定五类之一：1.日常生活 2.小烦恼 3.工作 4.小幸运 5.对user暗戳戳的思念/表白/吃醋。
-评论区必须是同世界观角色。
-生成 ${settings.postCount} 篇帖子，每篇 ${settings.commentCount} 条评论。
-输出纯JSON数组:[{"author":"角色名","content":"正文","likes":数字,"stars":数字,"comments":[{"author":"评论人","content":"内容"}]}]`;
+            prompt = `${basePrompt}\n主题限定五类之一：1.日常生活 2.小烦恼 3.工作 4.小幸运 5.对user暗戳戳的思念/表白/吃醋。\n评论区必须是同世界观角色。\n生成 ${settings.postCount} 篇帖子，每篇 ${settings.commentCount} 条评论。\n输出纯JSON数组:[{"author":"角色名","content":"正文","likes":数字,"stars":数字,"comments":[{"author":"评论人","content":"内容"}]}]`;
           } else if (boardSub === 'cross') {
-            prompt = `${basePrompt}
-这是【跨界大乱炖】板块。围绕以下三种反应生成帖子（三选一或混合）：
-① 各世界观角色发现 user 在他们那边也有"马甲"的震惊反应——拉群对质、发帖吐槽、追问细节；
-② 各世界观里暗恋 user 的角色/追求者聚在一起时的反应——互相试探、比较、吃醋、抱团发疯、宣战；
-③ 某个世界观的角色发帖描述 user 在他们那边干过的具体事情（日常/糗事/温柔互动/战斗片段），评论区是该世界观其他角色的追问、羡慕、酸柠檬反应。
-角色必须严格遵循各自世界观人设，跨界发言时保持自己的说话方式。
-生成 ${settings.postCount} 篇，每篇 ${settings.commentCount} 条评论。输出格式同上。`;
+            prompt = `${basePrompt}\n这是【跨界大乱炖】板块。围绕以下三种反应生成帖子（三选一或混合）：\n① 各世界观角色发现 user 在他们那边也有"马甲"的震惊反应——拉群对质、发帖吐槽、追问细节；\n② 各世界观里暗恋 user 的角色/追求者聚在一起时的反应——互相试探、比较、吃醋、抱团发疯、宣战；\n③ 某个世界观的角色发帖描述 user 在他们那边干过的具体事情，评论区是该世界观其他角色的追问、羡慕、酸柠檬反应。\n角色必须严格遵循各自世界观人设，跨界发言时保持自己的说话方式。\n生成 ${settings.postCount} 篇，每篇 ${settings.commentCount} 条评论。输出格式同上。`;
           } else {
-            prompt = `${basePrompt}
-这是【if 线】板块——一个平行时空里，帖主已经和 user 在一起了（帖主是 user 的男朋友/女朋友/老公/老婆）。
-帖主发帖内容围绕【恋爱日常/婚后甜蜜/被 user 撒娇/接送/带回家见家长/小吵架和好/秀戒指秀合照】等主题，字里行间掩不住的秀恩爱、炫耀式发言。
-⚠️ 世界观必须一致：帖主和评论区角色必须来自同一个世界观。
-⚠️ 重点：评论区里的其他角色不是暗恋帖主，而是【暗恋 user】！所以看到帖主在秀恩爱时会——酸到冒泡、破防发疯、阴阳怪气、追问 user 的细节、幻想自己在 if 线取而代之，或者装大度实则心碎。
-帖主保持人设不 OOC，秀恩爱甜度拉满；评论区暗恋 user 的角色反应活人化、有戏剧张力。
-生成 ${settings.postCount} 篇 if 帖子，每篇 ${settings.commentCount} 条评论。输出格式同上。`;
+            prompt = `${basePrompt}\n这是【if 线】板块——一个平行时空里，帖主已经和 user 在一起了（帖主是 user 的男朋友/女朋友/老公/老婆）。\n帖主发帖内容围绕【恋爱日常/婚后甜蜜/被 user 撒娇/接送/带回家见家长/小吵架和好/秀戒指秀合照】等主题，字里行间掩不住的秀恩爱、炫耀式发言。\n⚠️ 世界观必须一致：帖主和评论区角色必须来自同一个世界观。\n⚠️ 重点：评论区里的其他角色不是暗恋帖主，而是【暗恋 user】！所以看到帖主在秀恩爱时会——酸到冒泡、破防发疯、阴阳怪气、追问 user 的细节、幻想自己在 if 线取而代之，或者装大度实则心碎。\n帖主保持人设不 OOC，秀恩爱甜度拉满；评论区暗恋 user 的角色反应活人化、有戏剧张力。\n生成 ${settings.postCount} 篇 if 帖子，每篇 ${settings.commentCount} 条评论。输出格式同上。`;
           }
 
           const raw = await callAI(prompt);
           const json = raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1);
           const arr = JSON.parse(json);
-          const newPosts = arr.map(it => ({
-            id: crypto.randomUUID(),
-            author: it.author || "未知",
-            content: it.content || "",
-            likes: it.likes ?? Math.floor(Math.random() * 500),
-            stars: it.stars ?? Math.floor(Math.random() * 200),
-            comments: it.comments || []
-          }));
-
-          if (currentMode === 'feed') {
-            posts = [...newPosts, ...posts];
-            await roche.storage.set("forum_posts", posts);
-            renderFeed();
-          } else if (boardSub === 'cross') {
-            crossoverPosts = [...newPosts, ...crossoverPosts];
-            await roche.storage.set("forum_crossover_posts", crossoverPosts);
-            renderCross();
-          } else {
-            ifPosts = [...newPosts, ...ifPosts];
-            await roche.storage.set("forum_if_posts", ifPosts);
-            renderIf();
-          }
+          const newPosts = arr.map(it => ({ id: crypto.randomUUID(), author: it.author || "未知", content: it.content || "", likes: it.likes ?? Math.floor(Math.random() * 500), stars: it.stars ?? Math.floor(Math.random() * 200), comments: it.comments || [] }));
+          if (currentMode === 'feed') { posts = [...newPosts, ...posts]; await roche.storage.set("forum_posts", posts); renderFeed(); }
+          else if (boardSub === 'cross') { crossoverPosts = [...newPosts, ...crossoverPosts]; await roche.storage.set("forum_crossover_posts", crossoverPosts); renderCross(); }
+          else { ifPosts = [...newPosts, ...ifPosts]; await roche.storage.set("forum_if_posts", ifPosts); renderIf(); }
           roche.ui.toast("捕捉到新的时空电波");
         } catch (err) {
-          console.error(err);
-          roche.ui.toast("生成失败，请检查API或重试");
-        } finally {
-          loadingMask.style.display = 'none';
-        }
+          console.error(err); roche.ui.toast("生成失败：" + (err.message || "请检查API配置"));
+        } finally { loadingMask.style.display = 'none'; }
       };
 
       $('#forum-exit').onclick = () => roche.ui.closeApp();
-      renderFeed();
-      renderMemoryLists();
+      renderFeed(); renderMemoryLists();
     },
     async unmount(container) {
       container.replaceChildren();
