@@ -1,7 +1,7 @@
 {
   "id": "minimalist-forum",
   "name": "极简论坛",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "黑白立体线条风格，支持自己发帖与AI沉浸互动的极简论坛",
   "author": "朵朵",
   "entry": "https://raw.githubusercontent.com/Yff316/roche-forum-plugin/main/forum-plugin.js",
