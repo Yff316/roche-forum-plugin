@@ -1,8 +1,8 @@
 {
   "id": "minimalist-forum",
   "name": "极简论坛",
-  "version": "1.1.0",
-  "description": "黑白立体线条风格、支持 AI 自动生成帖子与评论、读取世界书和用户数据的沉浸式代入向论坛",
+  "version": "1.2.0",
+  "description": "黑白立体线条风格，支持自己发帖与AI沉浸互动的极简论坛",
   "author": "朵朵",
   "entry": "https://raw.githubusercontent.com/Yff316/roche-forum-plugin/main/forum-plugin.js",
   "hash": "",
