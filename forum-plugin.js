@@ -1,7 +1,7 @@
 window.RochePlugin.register({
   id: "minimalist-forum",
   name: "极简论坛",
-  version: "1.9.1",
+  version: "2.9.1",
   apps: [{
     id: "minimalist-forum-app",
     name: "论坛主页",
