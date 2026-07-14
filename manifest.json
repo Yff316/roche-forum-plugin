@@ -1,7 +1,7 @@
 {
   "id": "minimalist-forum",
   "name": "极简论坛",
-  "version": "1.9.2",
+  "version": "2.7.0",
   "description": "角色论坛模拟器，支持主页/跨界/if线三板块、树形评论、世界观锁定、世界书绑定",
   "author": "朵朵",
   "entry": "https://raw.githubusercontent.com/Yff316/roche-forum-plugin/main/forum-plugin.js",
